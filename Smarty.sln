@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.32002.261
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Smarty", "Smarty.csproj", "{5A604E51-9972-41D6-BB67-FE5B58677B3E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tarty", "..\Tarty\Tarty.csproj", "{7A6856B3-E907-4099-8F3B-EEB82C065D17}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5A604E51-9972-41D6-BB67-FE5B58677B3E}.Debug|x64.ActiveCfg = Debug|x64
+		{5A604E51-9972-41D6-BB67-FE5B58677B3E}.Debug|x64.Build.0 = Debug|x64
+		{7A6856B3-E907-4099-8F3B-EEB82C065D17}.Debug|x64.ActiveCfg = Debug|x64
+		{7A6856B3-E907-4099-8F3B-EEB82C065D17}.Debug|x64.Build.0 = Debug|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4B0F7F41-817D-44FB-BBED-05182DF24436}
+	EndGlobalSection
+EndGlobal

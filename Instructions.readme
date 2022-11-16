@@ -1,0 +1,57 @@
+﻿=== Smarty ===
+Artillery control script.
+Made for Northwind Weapons 203mm Howitzer cannon.
+Not to be confused with vanilla Space Engineers artillery.
+
+Author: DFPercush
+github.com/DFPercush
+Buy me a coffee: ko-fi/com/DFPercush
+
+Build a 203 on a rotor/hinge turret and try to place the blocks
+so that forward is 0 degrees on the rotor and +90 on the hinge.
+Or whatever you want the "stow" position to be should be 0/+90.
+
+LCD Panel and indicator light is optional.
+Antenna is optional but highly recommended, in conjunction with
+the "Tarty" targeting script.
+
+To use, copy and paste a GPS coordinate into the argument.
+
+Disclaimer: As much as I have tried, using several methods,
+I just can't say this thing is always 100% accurate.
+It seems to always be just a little long or a little short.
+So fire a ranging shot and adjust from there.
+High arc seems to be more accurate, but you can't use high arc
+with high velocity rounds, they'll time out and despawn.
+Space Engineers physics is weird, please don't report about this.
+
+
+Commands:
+stop - Halts program immediately and locks rotors.
+idle - Locks rotors in current position but stays running.
+       Continues to monitor comminucation channels.
+stow - Brings gun to forward storage position and goes idle.
+(gps link) - Acquire a target
+high - Uses a high arc trajectory. (default)
+       High velocity rounds may time out.
+low  - Uses a low arc, flat trajectory.
+orient - Display local grid orientation. (advanced)
+         Used to configure non-conventional setups.
+open /
+open fire - Begin firing. Will shoot until you stop it.
+cease /
+cease fire - Stop shooting.
+ofs (x) (y) (z) - Apply an offset to the current target location.
+                  Can be used to adjust aim.
+
+right (distance)   - Adjust aim by (distance) m in the
+left (distance)      corresponding direction
+forward (distance)
+back (distance)
+
+ammo (number)   - Chooses an ammo type. i.e. low/medium/high velocity = 0,1,2
+                  Note that sometimes this does not take effect until
+                  the gun reloads. I have tried to force a reload through the
+                  script, but it just doesn't work, sorry. You'll have to do
+                  that part through the terminal.
+
