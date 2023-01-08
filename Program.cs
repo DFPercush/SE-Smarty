@@ -51,11 +51,16 @@ namespace IngameScript
         const string RadioChannel = "smArty";
         const string IndicatorLight = "Interior Light";
 
+        // LCD output echoes what is printed in terminal
+        const string DisplayBlock = "LCD Panel";
+
+        // Stow / storage position
+        const float Stow_Angle_Elevation = 89;
+        const float Stow_Angle_Azimuth = 0;
+
         // How long will output messages stay in terminal
         int messageTimeout = 10;
 
-        // LCD output echoes what is printed in terminal
-        const string DisplayBlock = "LCD Panel";
 
         // For blocks that have multiple displays like button panels or cockpits
         const int DisplayIndex = 0;
@@ -918,6 +923,7 @@ namespace IngameScript
                     //azimuthErr = AngleDiffDeg(aimHoriz, toTargetHoriz, up) * inverted;
                     azimuthErr = AngleDiffDeg(aimHoriz, toTargetHoriz, up);
                     pidAzimuth.Update(azimuthErr);
+                    Unlimit();
                     azimuthRotor.TargetVelocityRPM = (float)pidAzimuth.Output;
 
                     if (inverted > 0)
@@ -1059,17 +1065,24 @@ namespace IngameScript
                     azimuthRotor.RotorLock = false;
                     elevationHinge.RotorLock = false;
                     Print("Stowing");
-                    
+
                     //azimuthErr = ((azimuthRotor.Angle * 180.0/pi + 180) % 360.0) - 180;
-                    azimuthErr = ((azimuthRotor.Angle * rad2deg + 180) % 360.0) - 180;
+
+                    Unlimit();
+
+                    azimuthErr = (((azimuthRotor.Angle * rad2deg) - Stow_Angle_Azimuth + 180) % 360.0) - 180;
                     pidAzimuth.setpoint = 0;
                     pidAzimuth.Update(azimuthErr);
                     azimuthRotor.TargetVelocityRPM = (float)pidAzimuth.Output;
-                    
-                    elevationErr = -(89 - (elevationHinge.Angle * 180 / pi));
+
+                    //elevationErr = -(89 - (elevationHinge.Angle * 180 / pi));
+                    elevationErr = (elevationHinge.Angle * 180 / pi) - Stow_Angle_Elevation;
                     pidElevation.setpoint = 0;
                     pidElevation.Update(elevationErr);
                     elevationHinge.TargetVelocityRPM = (float)pidElevation.Output;
+
+
+
 
                     Print($"Azimuth err: {azimuthErr:0.###} deg");
                     Print($"Elevation err: {elevationErr:0.###} deg");
@@ -1840,6 +1853,14 @@ namespace IngameScript
             //Console.WriteLine($"cosTheta = {cosTheta}");
             //return Math.Acos(((radius*radius) + (focus*focus) - (d*d)) / (2 * radius * focus));
             return Math.Acos(cosTheta);
+        }
+
+        void Unlimit()
+		{
+            azimuthRotor.UpperLimitDeg = 361;
+            azimuthRotor.LowerLimitDeg = -361;
+            elevationHinge.UpperLimitDeg = 90;
+            elevationHinge.LowerLimitDeg = -90;
         }
 
     } // Program
