@@ -37,38 +37,55 @@ namespace IngameScript
         //#################################################################
         // CONFIG
 
-        // Calibration,
+        // === Block names ===
+
+        const string GunName = "203mm Howitzer";
+        // ^-- This can be a group, or individual block names may contain this text.
+
+        // Note: Rotor and hinge names are now determined by scanning the grid.
+        // You don't need to name them here any more.
+        // Just make sure you build it like rotor -> hinge -> gun.
+        // Placing conveyors or other blocks is fine,
+        // as long as it doesn't create an extra subgrid in between those elements.
+
+
+        const string Antenna = "Antenna";
+        // optional
+
+        const string RadioChannel = "smArty";
+
+
+        const string IndicatorLight = "Interior Light";
+
+
+        // LCD output echoes what is printed in terminal
+        const string DisplayBlock = "LCD Panel";
+
+
+        // === Calibration ===
         // if things always seem to need the same amount of adjustment.
         double CalibrateRight = 0.0;
         double CalibrateForward = 0.0;
 
-        // Block names
-		const string AzimuthRotor = "Advanced Rotor 3x3";
-        const string ElevationRotor = "Hinge 3x3";
-        const string Gun = "Artillery"; // single block or group
-        
-        const string Antenna = "Antenna"; // optional
-        const string RadioChannel = "smArty";
-        const string IndicatorLight = "Interior Light";
-
-        // LCD output echoes what is printed in terminal
-        const string DisplayBlock = "LCD Panel";
 
         // Stow / storage position
         const float Stow_Angle_Elevation = 89;
         const float Stow_Angle_Azimuth = 0;
 
-        // How long will output messages stay in terminal
+
+        // How long will output messages stay in terminal, in seconds.
         int messageTimeout = 10;
 
 
         // For blocks that have multiple displays like button panels or cockpits
         const int DisplayIndex = 0;
 
-        const double aimSettledThreshold_SpeedRPM = 0.05; // rpm
+        // When to determine that the gun is done positioning and is ready to fire
+        const double aimSettledThreshold_SpeedRPM = 0.05;
         const double aimSettledThreshold_AngleDeg = 0.05;
 
-        // How often to report status to targeting craft
+
+        // How often to report status to targeting craft, in ms
         const int RadioUpdateInterval = 1000;
 
 
@@ -77,11 +94,11 @@ namespace IngameScript
         // There should be at least one number here.
         readonly double[] AmmoVelocities = { 125, 225, 325 };
         
-        //const int ShotDelay = 60 * 8; // frames at 60 fps
 
 
+        // === ADVANCED, Don't worry about this ===
+        //
         // GunLocalAxis defines the coordinate system of the gun model.
-        // Don't worry about this unless the aiming is broken.
         // The Northwind 203mm Howitzer's barrel points along -Z.
         // If you are using another mod or a different model,
         // this might need to change.
@@ -107,7 +124,8 @@ namespace IngameScript
         #endregion
 
 
-        PID pidAzimuth = new PID
+        Dictionary<long, PID> pidAzimuth = new Dictionary<long, PID>();
+        PID pidTemplateAzimuth = new PID
         {
             Kp = 0.5, //.3,
             Ki = 1.0, // 0.1
@@ -121,7 +139,8 @@ namespace IngameScript
             setpoint = 0
         };
 
-        PID pidElevation = new PID
+        Dictionary<long, PID> pidElevation = new Dictionary<long, PID>();
+        PID pidTemplateElevation = new PID
         {
             Kp = 0.5, //0.3,
             Ki = 1.0, //0.1,
@@ -134,7 +153,7 @@ namespace IngameScript
             dt = 1.0 / 60,
             setpoint = 0
         };
-
+        
 
         const double pi = Math.PI;
         const double pi2 = pi / 2;
@@ -151,11 +170,16 @@ namespace IngameScript
 
         //SpaceEngineers.Game.EntityComponents.GameLogic.Discovery.
         //Sandbox.ModAPI.
-        IMyMotorStator azimuthRotor;
-        IMyMotorStator elevationHinge;
+        //IMyMotorStator azimuthRotor;
+        //IMyMotorStator elevationHinge;
+        
+        //List<IMyMotorStator> azimuthRotors = new List<IMyMotorStator>();
+        //List<IMyMotorStator> elevationHinges = new List<IMyMotorStator>();
+
         IMyShipController cockpit;
         //IMySmallMissileLauncher gun;
-        IMyUserControllableGun gun;
+        //IMyUserControllableGun gun;
+        //List<IMyUserControllableGun> guns;
         List<IMyUserControllableGun> guns = new List<IMyUserControllableGun>();
         IMyLightingBlock light;
         IMyRadioAntenna antenna;
@@ -193,6 +217,9 @@ namespace IngameScript
         bool fireCommandGiven = false;
         //bool firing = false;
 
+        Dictionary<long, IMyMotorStator> HingeOfGun = new Dictionary<long, IMyMotorStator>();
+        Dictionary<long, IMyMotorStator> RotorOfGun = new Dictionary<long, IMyMotorStator>();
+
 
         void msg(string s)
 		{
@@ -219,35 +246,151 @@ namespace IngameScript
             {
                 cockpit = conts[0];
             }
-            azimuthRotor = G.GetBlockWithName(AzimuthRotor) as IMyMotorStator;
-            elevationHinge = G.GetBlockWithName(ElevationRotor) as IMyMotorStator;
+            //var gaz = G.GetBlockGroupWithName(AzimuthRotor);
+            //if (gaz != null)
+			//{
+            //    gaz.GetBlocksOfType(azimuthRotors);
+            //    foreach (var az in azimuthRotors) { pidAzimuth[az.EntityId] = pidTemplateAzimuth; }
+			//}
+            //var tmpAz = new List<IMyMotorStator>();
+			//G.GetBlocksOfType(tmpAz);
+            //foreach (var az in tmpAz)
+			//{
+            //    if (az.CustomName == AzimuthRotor) { azimuthRotors.Add(az); }
+            //    pidAzimuth[az.EntityId] = pidTemplateAzimuth;
+            //}
+            ////azimuthRotor = G.GetBlockWithName(AzimuthRotor) as IMyMotorStator;
+            //
+            //var gel = G.GetBlockGroupWithName(ElevationRotor);
+            //if (gel != null)
+			//{
+            //    gel.GetBlocksOfType(elevationHinges);
+            //    foreach (var el in elevationHinges) { pidElevation[el.EntityId] = pidTemplateElevation; }
+            //}
+            //var tmpEl = new List<IMyMotorStator>();
+            //G.GetBlocksOfType(tmpEl);
+            //foreach (var el in tmpEl)
+			//{
+            //    if (el.CustomName == ElevationRotor)
+            //    {
+            //        elevationHinges.Add(el);
+            //        pidElevation[el.EntityId] = pidTemplateElevation;
+            //    }
+			//}
+            ////elevationHinge = G.GetBlockWithName(ElevationRotor) as IMyMotorStator;
 
-            var gunsGroup = G.GetBlockGroupWithName(Gun);
+            var gunsGroup = G.GetBlockGroupWithName(GunName);
             if (gunsGroup != null)
 			{
                 gunsGroup.GetBlocksOfType(guns);
-                if (guns.Count > 0)
-				{
-                    gun = guns[0];
-				}
+                //if (guns.Count > 0)
+                //{
+                //    gun = guns[0];
+                //}
+                msg($"{guns.Count} guns in group.");
 			}
             else
 			{
-                gun = G.GetBlockWithName(Gun) as IMyUserControllableGun; //IMySmallMissileLauncher;
-                guns.Add(gun);
+                msg($"No group '{GunName}'");
+                //gun = G.GetBlockWithName(Gun) as IMyUserControllableGun; //IMySmallMissileLauncher;
+                //guns.Add(gun);
 			}
+            var tmpguns = new List<IMyUserControllableGun>();
+            G.GetBlocksOfType(tmpguns);
+            int nIndividualNamed = 0;
+            foreach (var g in tmpguns)
+			{
+                if (g.CustomName.Contains(GunName))
+                {
+                    guns.Add(g);
+                    nIndividualNamed++;
+                }
+			}
+            msg($"{nIndividualNamed} guns individually named");
+
+
+
+
+            // Map rotors and hinges to their subgrid gun
+            var GridOfGun = new Dictionary<long, long>();
+            foreach (var g in guns)
+            {
+                GridOfGun[g.EntityId] = g.CubeGrid.EntityId;
+                //Echo($"GridOfGun[{g.EntityId}] = {g.CubeGrid.EntityId}");
+            }
+
+            var AllStators = new List<IMyMotorStator>();
+            G.GetBlocksOfType(AllStators);
+            foreach (var gr in GridOfGun)
+            {
+                //if (h.Top.CubeGrid.EntityId == )
+                foreach (var h in AllStators) //elevationHinges)
+                {
+                    if (h.Top.CubeGrid.EntityId == gr.Value)
+                    {
+                        HingeOfGun[gr.Key] = h;
+                        break;
+                        //Echo($"HingeOfGun[{gr.Key}] = {h.EntityId}");
+                    }
+                }
+            }
+
+            foreach (var h in HingeOfGun)
+            {
+                foreach (var r in AllStators) // azimuthRotors)
+                {
+                    if (r.Top.CubeGrid.EntityId == h.Value.CubeGrid.EntityId)
+                    {
+                        //RotorOfGun[h.Key] = r;
+                        RotorOfGun[h.Key] = r;
+                        break;
+                        //Echo($"RotorOfGun[{h.Key}] = {r.EntityId}");
+                    }
+                }
+            }
+
+            foreach (var h in HingeOfGun.Values)
+			{
+                pidElevation[h.EntityId] = new PID(pidTemplateElevation);
+			}
+            foreach (var r in RotorOfGun.Values)
+			{
+                pidAzimuth[r.EntityId] = new PID(pidTemplateAzimuth);
+			}
+
+
+
+
+
+
+
+
+
+
+
             antenna = G.GetBlockWithName(Antenna) as IMyRadioAntenna;
             light = G.GetBlockWithName(IndicatorLight) as IMyLightingBlock;
 
 
-            if ((azimuthRotor == null))
-            {
-                msg("Error: Missing azimuth rotor. Check name in script.");
-            }
-            if (elevationHinge == null)
-            {
-                msg("Error: Missing elevation rotor. Check name in script.");
-            }
+            //if ((azimuthRotors.Count == 0))
+            //{
+            //    msg("Error: Missing azimuth rotor. Check name in script.");
+            //}
+            //if (elevationHinges.Count == 0)
+            //{
+            //    msg("Error: Missing elevation rotor. Check name in script.");
+            //}
+            foreach (var gun in guns)
+			{
+                if (!HingeOfGun.ContainsKey(gun.EntityId))
+				{
+                    msg($"Warning: Hinge not found for '{gun.CustomName}'");
+				}
+                if (!RotorOfGun.ContainsKey(gun.EntityId))
+				{
+                    msg($"Warning: Rotor not found for '{gun.CustomName}'");
+				}
+			}
             if (cockpit == null)
             {
                 msg("Error: No ship controller found. Build a cockpit, seat, or remote control.");
@@ -256,9 +399,9 @@ namespace IngameScript
 			{
                 msg("(optional) Operating without indicator light.");
 			}
-            if (gun == null)
+            if (guns.Count == 0)
 			{
-                msg("Error: Gun not found. Check name in script.");
+                msg("Error: No guns found. Check name in script.");
 			}
             if (antenna == null)
 			{
@@ -298,22 +441,28 @@ namespace IngameScript
                 }
             }
 
+
+
+
             Idle();
             msg("System online.");
+
+            //Runtime.UpdateFrequency = UpdateFrequency.None;
+            //Echo("Temporarily disabled for debugging.");
         }
         public void Save()
         {
             //this.Storage == "";
         }
 
-        FiringSolution fs = new FiringSolution();
+        Dictionary<long, FiringSolution> fs = new Dictionary<long, FiringSolution>();
 
-        double azimuthErr = 1.0;
-        double elevationErr = 1.0;
+        Dictionary<long, double> azimuthErr = new Dictionary<long, double>();
+        Dictionary<long, double> elevationErr = new Dictionary<long, double>();
 
-        FindZeroParams fz = new FindZeroParams();
-        Vector3D tmpvv = new Vector3D();
-        Vector3D tmprv = new Vector3D();
+        //FindZeroParams fz = new FindZeroParams();
+        //Vector3D tmpvv = new Vector3D();
+        //Vector3D tmprv = new Vector3D();
 
 
         double CalcDistanceRK4(double g, double rPlanet, double rStart, double rTarget, double barrelVel, double fireAngleRad, double dt)
@@ -357,11 +506,20 @@ namespace IngameScript
 
         void Recalc()
 		{
-            Recalc_parabolic();
+            foreach (var g in guns)
+            {
+                Recalc_parabolic(g);
+            }
             //Recalc_elliptical();
             //Recalc_RK4();
 		}
 
+
+
+
+
+
+        /**************************************
         void Recalc_RK4()
 		{
             //Recalc_parabolic();
@@ -497,9 +655,14 @@ namespace IngameScript
             fs.elevationAngleHighDeg = fs.elevationAngleHighRad * 180.0 / Math.PI;
             //fs.OutOfRange // TODO: <--
         }
+        ***********************************************************************/
+
+
+
+
 
         //*********************
-        void Recalc_parabolic()
+        void Recalc_parabolic(IMyUserControllableGun gun)
         {
             var myPos = gun.WorldMatrix.Translation;
             Vector3D pp, toTarget, toTargetHoriz;
@@ -524,6 +687,9 @@ namespace IngameScript
             var altDiff = targetAlt - alt;
             //fs = CalcFiringSolution(ammoVel, (targetLoc - (altDiff * targetUp) - myPos).Length(), altDiff, cockpit.GetNaturalGravity().Length());
 
+            //if (guns.Count > 0)
+            //{
+            //var gun = guns[0];
             var ammoIndex = gun.GetProperty("WC_PickAmmo").As<Int64>().GetValue(gun);
             double barrelSpeed = (ammoIndex < AmmoVelocities.Length) ? AmmoVelocities[ammoIndex] : AmmoVelocities[0];
 
@@ -534,8 +700,9 @@ namespace IngameScript
             double arcLen = (myPos - pp).Length() * planetCentricAngle;
             //fs = CalcFiringSolution(barrelSpeed, toTargetHoriz.Length(), altDiff, -cockpit.GetNaturalGravity().Length());
             //fs = CalcFiringSolution(barrelSpeed, toTargetHoriz.Length(), altDiff, cockpit.GetNaturalGravity().Length());
-            fs = CalcFiringSolution(barrelSpeed, arcLen, altDiff, cockpit.GetNaturalGravity().Length());
-
+            //fs = CalcFiringSolution(barrelSpeed, arcLen, altDiff, cockpit.GetNaturalGravity().Length());
+            fs[gun.EntityId] = CalcFiringSolution(barrelSpeed, arcLen, altDiff, cockpit.GetNaturalGravity().Length());
+            //}
         }
         // ******************************/
 
@@ -578,13 +745,13 @@ namespace IngameScript
 
         void targetGPS(string arg)
 		{
-
-            myPos = gun.WorldMatrix.Translation;
+            var myPos = cockpit.WorldMatrix.Translation;
+            Vector3D pp;
             cockpit.TryGetPlanetPosition(out pp);
-            up = myPos - pp; up.Normalize();
-            toTarget = targetLoc - myPos;
-            forward = toTarget; forward.Normalize();
-            right = toTarget.Cross(up); right.Normalize();
+            var up = myPos - pp; up.Normalize();
+            var toTarget = targetLoc - myPos;
+            var forward = toTarget; forward.Normalize();
+            var right = toTarget.Cross(up); right.Normalize();
 
             var gp = arg.Split(':');
             if (gp.Length < 6)
@@ -602,7 +769,12 @@ namespace IngameScript
             state = ProgramState.Aiming;
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
             //if (Math.Abs(fs.elevationAngleDeg - 45) < 0.1)
-            if (fs.OutOfRange)
+            bool outOfRange = false;
+            foreach (var f in fs)
+			{
+                outOfRange |= f.Value.OutOfRange;
+			}
+            if (outOfRange)
             {
                 // TODO: Make a program state
                 Idle();
@@ -676,29 +848,38 @@ namespace IngameScript
             printBuf.Clear();
         }
 
-        Vector3D myPos, pp, toTarget, toTargetHoriz, forward, right, up;
+        //Vector3D myPos, pp, toTarget, toTargetHoriz, forward, right, up;
         List<TerminalActionParameter> reloadParams = new List<TerminalActionParameter>();
+
+        bool OutOfRange()
+		{
+            foreach (var f in fs.Values)
+			{
+                if (f.OutOfRange) { return true; }
+			}
+            return false;
+		}
 
         public void Main2(string arg, UpdateType upd)
         {
-            if ((azimuthRotor == null))
-            {
-                msg("Error: Missing azimuth rotor. Check name in script.");
-                return;
-            }
-            if (elevationHinge == null)
-            {
-                msg("Error: Missing elevation rotor. Check name in script.");
-                return;
-            }
+            //if ((azimuthRotors.Count == 0))
+            //{
+            //    msg("Error: Missing azimuth rotor. Check name in script.");
+            //    return;
+            //}
+            //if (elevationHinges.Count == 0)
+            //{
+            //    msg("Error: Missing elevation rotor. Check name in script.");
+            //    return;
+            //}
             if (cockpit == null)
             {
                 msg("Error: No ship controller found. Build a cockpit, seat, or remote control.");
                 return;
             }
-            if (gun == null)
+            if (guns.Count == 0)
             {
-                msg("Error: Gun not found. Check name in script.");
+                msg("Error: No guns found. Check name in script.");
                 return;
             }
 
@@ -722,18 +903,18 @@ namespace IngameScript
 
                 Print(state.ToString() + ' ' + Spinner());
 
-                var myPos = gun.WorldMatrix.Translation;
+                var myPos = cockpit.WorldMatrix.Translation;
+                Vector3D pp;
                 if (!cockpit.TryGetPlanetPosition(out pp))
                 {
                     msg("Not on a planet.");
                     return;
                 }
                 var alt = (myPos - pp).Length();
-                up = myPos - pp;
-                up.Normalize();
-                toTarget = targetLoc - myPos;
-                forward = toTarget; forward.Normalize();
-                right = toTarget.Cross(up); right.Normalize();
+                var up = myPos - pp; up.Normalize();
+                var toTarget = targetLoc - myPos;
+                var forward = toTarget; forward.Normalize();
+                var right = toTarget.Cross(up); right.Normalize();
 
 				if (arg == "stop")
 				{
@@ -766,15 +947,18 @@ namespace IngameScript
 				}
 				else if (arg == "orient")
 				{
-					msg("gun forward:");
-					msg($"{mul(gun.WorldMatrix.GetOrientation(), GunLocalAxis)}");
-					msg("gun up:");
-					msg($"{mul(gun.WorldMatrix.GetOrientation(), GunLocalUp)}");
-					msg("cockpit:");
-					msg($"{mul(cockpit.WorldMatrix.GetOrientation(), cockpitLocalForward)}");
-					//msg(mul(gun.WorldMatrix.GetOrientation(), GunLocalAxis).ToString());
-					//msg("");
-					//msg(div(GunLocalAxis, G.GetBlockWithName("203mm Howitzer").WorldMatrix.GetOrientation()).ToString());
+                    if (guns.Count > 0)
+                    {
+                        msg("gun forward:");
+                        msg($"{mul(guns[0].WorldMatrix.GetOrientation(), GunLocalAxis)}");
+                        msg("gun up:");
+                        msg($"{mul(guns[0].WorldMatrix.GetOrientation(), GunLocalUp)}");
+                        msg("cockpit:");
+                        msg($"{mul(cockpit.WorldMatrix.GetOrientation(), cockpitLocalForward)}");
+                        //msg(mul(gun.WorldMatrix.GetOrientation(), GunLocalAxis).ToString());
+                        //msg("");
+                        //msg(div(GunLocalAxis, G.GetBlockWithName("203mm Howitzer").WorldMatrix.GetOrientation()).ToString());
+                    }
 					return;
 				}
 				else if (arg == "stow")
@@ -896,9 +1080,15 @@ namespace IngameScript
                 //if (aiming || stowing)
                 if (state == ProgramState.Aiming || state == ProgramState.Firing) // || state == ProgramState.Stowing)
                 {
-                    azimuthRotor.RotorLock = false;
-                    elevationHinge.RotorLock = false;
-                    if (fs.OutOfRange)
+                    //azimuthRotor.RotorLock = false;
+                    foreach(var r in RotorOfGun.Values) { r.RotorLock = false; }
+                    //elevationHinge.RotorLock = false;
+                    foreach(var r in HingeOfGun.Values) { r.RotorLock = false; }
+
+                    Recalc();
+
+                    //if (fs.OutOfRange)
+                    if (OutOfRange())
 					{
                         Idle();
                         return;
@@ -906,44 +1096,75 @@ namespace IngameScript
                     Runtime.UpdateFrequency = UpdateFrequency.Update1;
                     //Print("Running...");
                     //var aim = mul(elevationHinge.Top.WorldMatrix.GetOrientation(), hingeLocalFacingAxis);
-                    var aim = mul(gun.WorldMatrix.GetOrientation(), GunLocalAxis);
-                    var aimVert = aim.Dot(up) * up;
-                    var aimHoriz = aim - aimVert;
-                    toTarget = targetLoc - myPos;
-                    var toTargetVert = toTarget.Dot(up) * up;
-                    //toTargetHoriz = toTarget - toTarget.Dot(up);
-                    toTargetHoriz = toTarget - toTargetVert;
 
-
-                    //var azimuthErr = AngleBetweenDeg(aimHoriz, toTargetHoriz);
-                    var inverted = Math.Sign(up.Dot(mul(gun.WorldMatrix.GetOrientation(), GunLocalUp)));
-                    //var inverted = Math.Sign(up.Dot(div(GunLocalUp, gun.WorldMatrix.GetOrientation())));
-                    //Print($"inv {inverted}");
-                    //Print($"inv sign: {inverted}");
-                    //azimuthErr = AngleDiffDeg(aimHoriz, toTargetHoriz, up) * inverted;
-                    azimuthErr = AngleDiffDeg(aimHoriz, toTargetHoriz, up);
-                    pidAzimuth.Update(azimuthErr);
-                    Unlimit();
-                    azimuthRotor.TargetVelocityRPM = (float)pidAzimuth.Output;
-
-                    if (inverted > 0)
+                    foreach (var gun in guns)
                     {
-                        //elevationErr = ((Math.Acos(aimVert.Length()) * 180.0 / Math.PI) - fs.elevationAngleDeg) * inverted;
-                        var selectAngle = useLowAngle ? fs.elevationAngleLowDeg : fs.elevationAngleHighDeg;
-                        //elevationErr = ((Math.Acos(aimVert.Length()) * 180.0 / Math.PI) - selectAngle);
-                        elevationErr = -((Math.Asin(aimVert.Length()) * rad2deg) - selectAngle);
+                        var aim = mul(gun.WorldMatrix.GetOrientation(), GunLocalAxis);
+                        var aimVert = aim.Dot(up) * up;
+                        var aimHoriz = aim - aimVert;
+                        toTarget = targetLoc - gun.WorldMatrix.Translation;
+                        var toTargetVert = toTarget.Dot(up) * up;
+                        //toTargetHoriz = toTarget - toTarget.Dot(up);
+                        var toTargetHoriz = toTarget - toTargetVert;
+                        toTargetVert.Normalize();
+                        toTargetHoriz.Normalize();
 
-                        //double targetHingeAngle = 90 - (useLowAngle ? fs.elevationAngleLowDeg : fs.elevationAngleHighDeg);
-                        //Print($"targetElevationAngle = {targetElevationAngle:0.##}");
-                        //elevationErr = ((Math.Acos(aimVert.Length()) * 180.0 / Math.PI) - selectAngle); // * inverted;
 
-                        pidElevation.Update(elevationErr);
-                        elevationHinge.TargetVelocityRPM = (float)pidElevation.Output;
+                        IMyMotorStator az, el;
+                        PID paz, pel;
+						try
+                        {
+                            az = RotorOfGun[gun.EntityId];
+                            el = HingeOfGun[gun.EntityId];
+                            paz = pidAzimuth[az.EntityId];
+                            pel = pidElevation[el.EntityId];
+                            if (az == null || el == null ||
+                                paz == null || pel == null)
+                            {
+                                throw new NullReferenceException();
+                            }
+                        }
+                        catch
+						{
+                            Print($"Warning: No control for '{gun.CustomName}'");
+                            continue;
+						}
+
+
+                        //var azimuthErr = AngleBetweenDeg(aimHoriz, toTargetHoriz);
+                        var inverted = Math.Sign(up.Dot(mul(gun.WorldMatrix.GetOrientation(), GunLocalUp)));
+                        //var inverted = Math.Sign(up.Dot(div(GunLocalUp, gun.WorldMatrix.GetOrientation())));
+                        //Print($"inv {inverted}");
+                        //Print($"inv sign: {inverted}");
+                        //azimuthErr = AngleDiffDeg(aimHoriz, toTargetHoriz, up) * inverted;
+                        azimuthErr[az.EntityId] = AngleDiffDeg(aimHoriz, toTargetHoriz, up);
+                        paz.Update(azimuthErr[az.EntityId]);
+                        Unlimit();
+                        az.TargetVelocityRPM = (float)paz.Output;
+
+                        //Echo($"az {az.Angle:0.000000}");
+
+                        if (inverted > 0)
+                        {
+                            //elevationErr = ((Math.Acos(aimVert.Length()) * 180.0 / Math.PI) - fs.elevationAngleDeg) * inverted;
+                            var selectAngle = useLowAngle ? fs[gun.EntityId].elevationAngleLowDeg : fs[gun.EntityId].elevationAngleHighDeg;
+                            //elevationErr = ((Math.Acos(aimVert.Length()) * 180.0 / Math.PI) - selectAngle);
+                            elevationErr[el.EntityId] = -((Math.Asin(aimVert.Length()) * rad2deg) - selectAngle);
+
+                            //double targetHingeAngle = 90 - (useLowAngle ? fs.elevationAngleLowDeg : fs.elevationAngleHighDeg);
+                            //Print($"targetElevationAngle = {targetElevationAngle:0.##}");
+                            //elevationErr = ((Math.Acos(aimVert.Length()) * 180.0 / Math.PI) - selectAngle); // * inverted;
+
+                            pel.Update(elevationErr[el.EntityId]);
+                            el.TargetVelocityRPM = (float)pel.Output;
+                        }
+                        else
+                        {
+                            el.TargetVelocityRPM = (float)pel.limMax;
+                        }
                     }
-                    else
-					{
-                        elevationHinge.TargetVelocityRPM = (float)pidElevation.limMax;
-					}
+
+                    bool bSettled = settled();
 
                     if (fireCommandGiven && (state != ProgramState.Firing))
                     {
@@ -985,7 +1206,7 @@ namespace IngameScript
 						{
                             light.BlinkIntervalSeconds = 0.5f;
                             light.BlinkLength = 50;
-                            if (settled())
+                            if (bSettled)
 							{
                                 light.Color = Color.Green;
 							}
@@ -1050,37 +1271,58 @@ namespace IngameScript
                     //msg($"Aim horiz Z: {aimHoriz.Z}");
 
                     
-                    Recalc();
 
 
-                    var dispAngle = useLowAngle ? fs.elevationAngleLowDeg : fs.elevationAngleHighDeg;
-                    Print($"Elev {dispAngle:0.###}");
-                    Print($"Azim off {azimuthErr:0.###} deg");
-                    Print($"Elev off {elevationErr:0.###} deg");
+                    //var dispAngle = useLowAngle ? fs.First().Value.elevationAngleLowDeg : fs.First().Value.elevationAngleHighDeg;
+                    //Print($"Elev {dispAngle:0.###}");
+                    if (bSettled) { Print("Settled."); }
+                    else { Print("Moving..."); }
+                    //Print($"Azim off {azimuthErr:0.###} deg");
+                    //Print($"Elev off {elevationErr:0.###} deg");
 
                 }
                 else if (state == ProgramState.Stowing)
 				{
-                    Runtime.UpdateFrequency = UpdateFrequency.Update1;
-                    azimuthRotor.RotorLock = false;
-                    elevationHinge.RotorLock = false;
-                    Print("Stowing");
+                    foreach (var gun in guns)
+                    {
+                        IMyMotorStator az, el;
+                        PID paz, pel;
+                        try
+						{
+                            az = RotorOfGun[gun.EntityId];
+                            el = HingeOfGun[gun.EntityId];
+                            paz = pidAzimuth[az.EntityId];
+                            pel = pidElevation[el.EntityId];
+                            if (az == null || el == null || paz == null || pel == null)
+							{
+                                throw new NullReferenceException();
+							}
+						}
+                        catch
+						{
+                            Print($"Warning: No control for '{gun.CustomName}'");
+                            continue;
+						}
+                        Runtime.UpdateFrequency = UpdateFrequency.Update1;
+                        az.RotorLock = false;
+                        el.RotorLock = false;
+                        Print("Stowing");
 
-                    //azimuthErr = ((azimuthRotor.Angle * 180.0/pi + 180) % 360.0) - 180;
+                        //azimuthErr = ((azimuthRotor.Angle * 180.0/pi + 180) % 360.0) - 180;
 
-                    Unlimit();
+                        Unlimit();
 
-                    azimuthErr = (((azimuthRotor.Angle * rad2deg) - Stow_Angle_Azimuth + 180) % 360.0) - 180;
-                    pidAzimuth.setpoint = 0;
-                    pidAzimuth.Update(azimuthErr);
-                    azimuthRotor.TargetVelocityRPM = (float)pidAzimuth.Output;
+                        azimuthErr[az.EntityId] = (((az.Angle * rad2deg) - Stow_Angle_Azimuth + 180) % 360.0) - 180;
+                        paz.setpoint = 0;
+                        paz.Update(azimuthErr[az.EntityId]);
+                        az.TargetVelocityRPM = (float)paz.Output;
 
-                    //elevationErr = -(89 - (elevationHinge.Angle * 180 / pi));
-                    elevationErr = (elevationHinge.Angle * 180 / pi) - Stow_Angle_Elevation;
-                    pidElevation.setpoint = 0;
-                    pidElevation.Update(elevationErr);
-                    elevationHinge.TargetVelocityRPM = (float)pidElevation.Output;
-
+                        //elevationErr = -(89 - (elevationHinge.Angle * 180 / pi));
+                        elevationErr[el.EntityId] = (el.Angle * 180 / pi) - Stow_Angle_Elevation;
+                        pel.setpoint = 0;
+                        pel.Update(elevationErr[el.EntityId]);
+                        el.TargetVelocityRPM = (float)pel.Output;
+                    }
 
 
 
@@ -1143,10 +1385,29 @@ namespace IngameScript
             //Print($"dAzim {azimuthRotor.TargetVelocityRPM:0.####}");
             //Print($"dElev {elevationHinge.TargetVelocityRPM:0.####}");
             //Print($"threshold {aimSettledThreshold}");
-            return (Math.Abs(azimuthErr) < aimSettledThreshold_AngleDeg) &&
-                (Math.Abs(elevationErr) < aimSettledThreshold_AngleDeg) &&
-                (azimuthRotor.TargetVelocityRPM < aimSettledThreshold_SpeedRPM) &&
-                (elevationHinge.TargetVelocityRPM < aimSettledThreshold_SpeedRPM);
+
+            //bool ret = true;
+            foreach (var ee in elevationErr.Values)
+			{
+                if (Math.Abs(ee) > aimSettledThreshold_AngleDeg) { return false; }
+			}
+            foreach (var ae in azimuthErr.Values)
+			{
+                if (Math.Abs(ae) > aimSettledThreshold_AngleDeg) { return false; }
+			}
+            foreach (var az in RotorOfGun.Values)
+			{
+                if (az.TargetVelocityRPM > aimSettledThreshold_SpeedRPM) { return false; }
+			}
+            foreach (var el in HingeOfGun.Values)
+			{
+                if (el.TargetVelocityRPM > aimSettledThreshold_SpeedRPM) { return false; }
+			}
+            return true;
+            //return (Math.Abs(azimuthErr) < aimSettledThreshold_AngleDeg) &&
+            //    (Math.Abs(elevationErr) < aimSettledThreshold_AngleDeg) &&
+            //    (azimuthRotor.TargetVelocityRPM < aimSettledThreshold_SpeedRPM) &&
+            //    (elevationHinge.TargetVelocityRPM < aimSettledThreshold_SpeedRPM);
         }
         void BroadcastStatus()
 		{
@@ -1160,10 +1421,25 @@ namespace IngameScript
 		{
             //gun.SetValueBool("WC_Shoot", false);
             foreach (var g in guns) { g.SetValueBool("WC_Shoot", false); }
-            azimuthRotor.TargetVelocityRPM = 0;
-            elevationHinge.TargetVelocityRPM = 0;
-            azimuthRotor.RotorLock = true;
-            elevationHinge.RotorLock = true;
+
+            //azimuthRotor.TargetVelocityRPM = 0;
+            //azimuthRotor.RotorLock = true;
+            foreach (var az in RotorOfGun.Values)
+            {
+                az.TargetVelocityRPM = 0;
+                az.RotorLock = true;
+            }
+
+            //elevationHinge.TargetVelocityRPM = 0;
+            //elevationHinge.RotorLock = true;
+            foreach (var el in HingeOfGun.Values)
+            {
+                el.TargetVelocityRPM = 0;
+                el.RotorLock = true;
+            }
+
+
+
             if (light != null)
 			{
                 //msg("blink Stop()"); //!rm
@@ -1185,8 +1461,16 @@ namespace IngameScript
                 light.BlinkLength = 84;
 			}
             Runtime.UpdateFrequency = UpdateFrequency.Update100;
-            azimuthRotor.RotorLock = true;
-            elevationHinge.RotorLock = true;
+            foreach (var az in RotorOfGun.Values)
+            {
+                //azimuthRotor.RotorLock = true;
+                az.RotorLock = true;
+            }
+            //elevationHinge.RotorLock = true;
+            foreach (var el in HingeOfGun.Values)
+			{
+                el.RotorLock = true;
+			}
             state = ProgramState.Idle;
 		}
 
@@ -1199,7 +1483,7 @@ namespace IngameScript
             public double elevationAngleLowDeg;
             
             public double targetDistance;
-            public DateTime splashTime;
+            //public DateTime splashTime;
             public double targetHeightOffset;
             //public double flightDuration; // TODO: not being set
             public bool OutOfRange;
@@ -1406,6 +1690,24 @@ namespace IngameScript
             private double m_output;
             public double Output { get { return m_output; } }
 
+            public PID() { }
+            public PID(PID b)
+			{
+                Kp = b.Kp;
+                Ki = b.Ki;
+                Kd = b.Kd;
+                lowPass = b.lowPass;
+                limMin = b.limMin;
+                limMax = b.limMax;
+                limMinInt = b.limMinInt;
+                limMaxInt = b.limMaxInt;
+                dt = b.dt;
+                setpoint = b.setpoint;
+                integrator = b.integrator;
+                prevError = b.prevError;
+                differentiator = b.differentiator;
+                prevMeasurement = b.prevMeasurement;
+            }
             public double Update(double measurement, bool debugPrint = false)
             {
                 double error = setpoint - measurement;
@@ -1857,10 +2159,20 @@ namespace IngameScript
 
         void Unlimit()
 		{
-            azimuthRotor.UpperLimitDeg = 361;
-            azimuthRotor.LowerLimitDeg = -361;
-            elevationHinge.UpperLimitDeg = 90;
-            elevationHinge.LowerLimitDeg = -90;
+            foreach (var r in RotorOfGun.Values)
+			{
+                r.UpperLimitDeg = 361;
+                r.LowerLimitDeg = -361;
+			}
+            foreach (var r in HingeOfGun.Values)
+			{
+                r.UpperLimitDeg = 90;
+                r.LowerLimitDeg = -90;
+			}
+            //azimuthRotor.UpperLimitDeg = 361;
+            //azimuthRotor.LowerLimitDeg = -361;
+            //elevationHinge.UpperLimitDeg = 90;
+            //elevationHinge.LowerLimitDeg = -90;
         }
 
     } // Program
