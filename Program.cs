@@ -701,7 +701,7 @@ namespace IngameScript
             //fs = CalcFiringSolution(barrelSpeed, toTargetHoriz.Length(), altDiff, -cockpit.GetNaturalGravity().Length());
             //fs = CalcFiringSolution(barrelSpeed, toTargetHoriz.Length(), altDiff, cockpit.GetNaturalGravity().Length());
             //fs = CalcFiringSolution(barrelSpeed, arcLen, altDiff, cockpit.GetNaturalGravity().Length());
-            fs[gun.EntityId] = CalcFiringSolution(barrelSpeed, arcLen, altDiff, cockpit.GetNaturalGravity().Length());
+            fs[gun.EntityId] = CalcFiringSolution(barrelSpeed, arcLen, altDiff, -cockpit.GetNaturalGravity().Length());
             //}
         }
         // ******************************/
@@ -793,6 +793,9 @@ namespace IngameScript
         //int shotDelayCountdown = 0;
         public void Main(string arg, UpdateType upd)
 		{
+            //Echo($"{CalcDist(325, 45 * deg2rad, -9.81, 100)}");
+            //return;
+
             if (light != null) { light.Enabled = false; }
             if (arg.Length > 0)
 			{
@@ -1570,9 +1573,9 @@ namespace IngameScript
             var p = new FindZeroParams();
             p.dx = 0.01;
             p.errStep = 0.1;
-            p.guess = 65 * deg2rad;
+            p.guess = 50 * deg2rad;
             p.iterationLimit = 100;
-            p.margin = 0.0001 * deg2rad;
+            p.margin = 1.0; // m, this is y not x 
             p.max = d90;
             p.min = 0;
             //msg($"vel {f.barrelVelocity}");
@@ -1583,7 +1586,14 @@ namespace IngameScript
 
             double angle1, angle2;
 
-            angle1 = FindZero((x) => calcDist(f.barrelVelocity, x, gravity, -targetHeightOffset) - targetDistance, p);
+            //msg($"barrelVelocity = {f.barrelVelocity:0}");
+            //msg($"gravity = {gravity:0.000}");
+            angle1 = FindZero((angle) =>
+            {
+                var dist = CalcDist(f.barrelVelocity, angle, gravity, -targetHeightOffset);
+                //msg($"{dist:0} - {targetDistance:0}");
+                return dist - targetDistance;
+            }, p);
             if (double.IsNaN(angle1))
             {
                 f.OutOfRange = true;
@@ -1601,7 +1611,7 @@ namespace IngameScript
                 //msg($"reflect {reflectAngle:0.##}");
                 //msg($"pg {p.guess:0.##}");
                 //Echo($"vel {f.barrelVelocity}");
-                angle2 = FindZero((x) => calcDist(f.barrelVelocity, x, gravity, -targetHeightOffset) - targetDistance, p);
+                angle2 = FindZero((angle) => CalcDist(f.barrelVelocity, angle, gravity, -targetHeightOffset) - targetDistance, p);
                 f.elevationAngleHighRad = Math.Max(angle1, angle2);
                 f.elevationAngleLowRad = Math.Min(angle1, angle2);
                 f.elevationAngleHighDeg = f.elevationAngleHighRad * rad2deg;
@@ -1626,12 +1636,13 @@ namespace IngameScript
         // ***********************/
 
         // Parabolic trajectory
-        double calcDist(double v, double theta, double g, double y0)
-		{
-            var vsin0 = v * Math.Sin(theta);
-            var vcos0 = v * Math.Cos(theta);
-            return (vcos0 / g) * (vsin0 + Math.Sqrt((vsin0 * vsin0) + (2 * g * y0)));
-        }
+        //double calcDist(double v, double theta, double g, double y0)
+		//{
+        //    var vsin0 = v * Math.Sin(theta);
+        //    var vcos0 = v * Math.Cos(theta);
+        //    return (vcos0 / g) * (vsin0 + Math.Sqrt((vsin0 * vsin0) + (2 * g * y0)));
+        //}
+
         //public static double QuadraticFormulaRealMax(double a, double b, double c)
         //{
         //    double sqr = (b * b) - (4 * a * c);
@@ -1888,6 +1899,7 @@ namespace IngameScript
 
                 // Test our latest guess
                 y = f(x);
+                //msg($"{x * rad2deg:0.00}deg => {y:0}m");
 
                 //msg($"{x * rad2deg:0.##} deg => {y:0.} m");
 
@@ -1928,8 +1940,8 @@ namespace IngameScript
                     x -= prev_dx;
                     continue;
                 }
-                
-                
+
+
                 if (Math.Abs(y) < p.margin)
                 {
                     return x;
@@ -1949,23 +1961,37 @@ namespace IngameScript
                 }
                 if (x + prev_dx < p.min)
                 {
-                    prev_dx = p.min - x;
-                    x = p.min;
+                    prev_dx = (p.min - x) / 2;
+                    x = (x + p.min) / 2;
                 }
                 else if (x + prev_dx > p.max)
                 {
-                    prev_dx = p.max - x;
-                    x = p.max;
+                    prev_dx = (p.max - x) / 2;
+                    x = (x + p.max) / 2;
                 }
                 else
-				{
+                {
                     x += prev_dx;
-				}
+                }
             }
             //Console.WriteLine($"Found zero in {iterationCount} iterations.");
             //return x;
         }
-        // **************************************/
+
+        // Parabolic trajectory
+        static double CalcDist(double v0, double theta, double g, double y0)
+        {
+            var v0y = v0 * Math.Sin(theta);
+            var v0x = v0 * Math.Cos(theta);
+
+            double sq = v0y * v0y - 2 * g * y0;
+            if (sq < 0) { return 0; }
+            double sr = Math.Sqrt(sq);
+            double rootA = (-v0y - sr) / g;
+            double rootB = (-v0y + sr) / g;
+            //return (v0x / g) * (v0y + Math.Sqrt((v0y * v0y) + (2 * g * y0)));
+            return v0x * Math.Max(rootA, rootB);
+        }
 
 
         // Runge-Kutta 4 single step
